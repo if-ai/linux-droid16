@@ -1,37 +1,45 @@
 ````markdown
 # 🐧 Linux-Droid16  
-**Run Debian XFCE on GrapheneOS / Android 16 without root or virtualization**
+**Run Debian XFCE on GrapheneOS / Android 16 — no root, no virtualization**
 
-A minimal setup for launching a full Debian Linux desktop inside **Android 16 Terminal**, viewable through the **Run VNC** app — completely **userland**, no `systemd`, no `root`, no `virtualization`.
-
----
-
-## 🧩 Overview
-
-This project provides two ready-to-run scripts:
-
-| Script | Where to Run | Purpose |
-|---------|---------------|----------|
-| [`phase1_setup.sh`](https://raw.githubusercontent.com/if-ai/linux-droid16/main/phase1_setup.sh) | Android 16 Terminal | Installs Debian userland via `proot-distro` and creates a launcher |
-| [`phase2_3_one_shot.sh`](https://raw.githubusercontent.com/if-ai/linux-droid16/main/phase2_3_one_shot.sh) | Inside Debian | Installs XFCE desktop, sets up TigerVNC, and creates start/stop helpers |
+This project lets you install and run a full **Debian desktop** on Android 16 (including GrapheneOS) using only the built-in **Android Terminal** and the **Run VNC** viewer.  
+Everything runs inside **userland** (`proot`), so it’s safe and reversible.
 
 ---
 
-## ⚙️ Installation Guide
+## 🚀 Quick Start
 
-### 1️⃣ Phase 1 — Base Setup (Android 16 Terminal)
-
+### 1️⃣ Clone the repository
 Open the **Android 16 Terminal** app and run:
 
 ```bash
-wget https://raw.githubusercontent.com/if-ai/linux-droid16/main/phase1_setup.sh
-bash phase1_setup.sh
+pkg update -y
+pkg install -y git
+git clone https://github.com/if-ai/linux-droid16.git
+cd linux-droid16
 ````
 
-This installs Debian in a userland environment using `proot-distro`
-and creates a launcher script called `debian-login.sh`.
+---
 
-Then enter Debian:
+### 2️⃣ Authorize scripts
+
+Make both scripts executable:
+
+```bash
+chmod +x phase1_setup.sh phase2_3_one_shot.sh
+```
+
+---
+
+### 3️⃣ Phase 1 — Base setup (Android Terminal)
+
+Run the first script to install `proot-distro`, create Debian, and a launcher:
+
+```bash
+bash phase1_setup.sh
+```
+
+When it finishes, start Debian:
 
 ```bash
 ./debian-login.sh
@@ -39,32 +47,37 @@ Then enter Debian:
 
 ---
 
-### 2️⃣ Phase 2 — Debian Desktop + VNC (inside Debian)
+### 4️⃣ Phase 2 — Desktop + VNC (inside Debian)
 
-Once inside Debian, set up the desktop environment and VNC:
+Now you’re inside Debian. Run the second script:
 
 ```bash
-wget https://raw.githubusercontent.com/if-ai/linux-droid16/main/phase2_3_one_shot.sh
-bash phase2_3_one_shot.sh
+bash /root/linux-droid16/phase2_3_one_shot.sh
 ```
 
-After setup, start the VNC server:
+*(or adjust the path if you cloned elsewhere)*
+
+It will:
+
+* Install XFCE desktop + TigerVNC
+* Ask you to set a VNC password
+* Create `start-vnc.sh` and `stop-vnc.sh` helpers
+
+When complete, start your desktop:
 
 ```bash
 ./start-vnc.sh
 ```
 
-Then open the **Run VNC** app and connect to:
+Then open **Run VNC** and connect to:
 
 ```
 Address: 127.0.0.1
 Port: 5901
-Password: (the one you set with vncpasswd)
+Password: (the one you set)
 ```
 
-You’ll see the **XFCE desktop** inside the VNC viewer.
-
-To stop VNC later:
+To stop later:
 
 ```bash
 ./stop-vnc.sh
@@ -72,34 +85,26 @@ To stop VNC later:
 
 ---
 
-## 🧠 What You Get
+## 💡 Optional: Run Node.js / Local Servers
 
-* Full **Debian (stable)** running in userland
-* **XFCE4 desktop** over TigerVNC
-* Safe, isolated environment — no root, no `systemd`
-* Persistent filesystem via `proot-distro`
-* Compatible with **GrapheneOS**, **Vanilla Android 16**, and **Termux-based terminals**
-
----
-
-## 🧰 Optional — Node.js, Python, etc.
-
-Inside Debian, you can install any server-side tools:
+Inside Debian you can install Node.js (via nvm) and run local apps:
 
 ```bash
 apt install -y curl
 curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 . ~/.nvm/nvm.sh
 nvm install --lts
+node -v
+npm -v
 ```
 
-Then run any Node.js app locally:
+Then run your app:
 
 ```bash
 node app.js
 ```
 
-Accessible at:
+Access it from Android at:
 
 ```
 http://127.0.0.1:<port>
@@ -107,25 +112,24 @@ http://127.0.0.1:<port>
 
 ---
 
-## 🧱 Directory Structure
+## 🧱 File Tree
 
 ```
 linux-droid16/
-├── phase1_setup.sh          # Run in Android 16 Terminal
+├── phase1_setup.sh          # Run in Android Terminal
 ├── phase2_3_one_shot.sh     # Run inside Debian
-├── debian-login.sh          # Auto-generated Debian launcher
-├── start-vnc.sh             # VNC start helper (auto-generated)
-└── stop-vnc.sh              # VNC stop helper (auto-generated)
+├── debian-login.sh          # Auto-generated launcher
+├── start-vnc.sh             # Created by script (run GUI)
+└── stop-vnc.sh              # Created by script (stop GUI)
 ```
 
 ---
 
-## 🧩 Troubleshooting
+## 🛠️ Troubleshooting
 
-**Terminal crashes after “VNC service” prompt:**
+**Terminal closes when enabling VNC service:**
 
-> GrapheneOS forbids low-level virtualization.
-> Only use these scripts — they stay in userland (`proot`).
+> That’s the original Ubuntu-16 installer. Use these scripts instead — they stay in userland and don’t touch virtualization.
 
 **Black screen in VNC:**
 
@@ -134,7 +138,7 @@ chmod +x ~/.vnc/xstartup
 ./stop-vnc.sh && ./start-vnc.sh
 ```
 
-**Reset Debian completely:**
+**Reset Debian environment:**
 
 ```bash
 proot-distro remove debian
@@ -145,12 +149,12 @@ proot-distro install debian
 
 ## 🪶 License
 
-[MIT License](LICENSE)
+MIT License
 
 ---
 
-**Repo:** [if-ai/linux-droid16](https://github.com/if-ai/linux-droid16)
-**Author:** [ImpactFrames (if@impactframes.ai)](https://impactframes.ai)
+**Repository:** [https://github.com/if-ai/linux-droid16](https://github.com/if-ai/linux-droid16)
+**Author:** ImpactFrames ([if@impactframes.ai](mailto:if@impactframes.ai))
 
 ```
 ```
