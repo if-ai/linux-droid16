@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# install_all_apt.sh — ONE-SHOT (APT-BASED) SETUP
-# For terminals that have `apt` (Debian/Ubuntu-like env on Android/GrapheneOS).
-# - Installs XFCE + TigerVNC (no systemd services)
-# - Creates user-level start/stop scripts for VNC and SSH
-# - Works when run as root or normal user
+# install_all_apt.sh — ONE-SHOT (APT-BASED) SETUP  [HARDENED]
+# - No pkg / proot-distro required
+# - Installs XFCE + TigerVNC + optional user-level SSH (no systemd)
+# - Safe with 'set -u' everywhere
 
 set -Eeuo pipefail
 
@@ -62,27 +61,35 @@ startxfce4
 EOF
 chmod +x '$TARGET_HOME/.vnc/xstartup'"
 
-# start/stop VNC helpers
+# start/stop VNC helpers (hardened for set -u)
 as_user "cat > '$TARGET_HOME/start-vnc.sh' <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-export DISPLAY=:1
-vncserver -kill :1 >/dev/null 2>&1 || true
-if [ ! -f \"\$HOME/.vnc/passwd\" ]; then
-  echo \"No VNC password set. You will be prompted now (min 6 chars).\"
+DISPLAY_NUM="\${VNC_DISPLAY:-:1}"
+GEOM="\${VNC_GEOMETRY:-1280x720}"
+LOCALHOST_FLAG="\${VNC_LOCALHOST:-no}"
+
+vncserver -kill "\$DISPLAY_NUM" >/dev/null 2>&1 || true
+if [ ! -f "\$HOME/.vnc/passwd" ]; then
+  echo "No VNC password set. You will be prompted now (min 6 chars)."
   vncpasswd
 fi
-vncserver :1 -geometry 1280x720 -localhost no
-echo \"VNC running on :1 (TCP 5901). Connect your VNC client to 127.0.0.1:5901\"
+export DISPLAY="\$DISPLAY_NUM"
+vncserver "\$DISPLAY_NUM" -geometry "\$GEOM" -localhost "\$LOCALHOST_FLAG"
+
+num="\${DISPLAY_NUM#:}"
+port=\$((5900 + \${num:-1}))
+echo "VNC running on \$DISPLAY_NUM (TCP \$port). Connect: 127.0.0.1:\$port"
 EOF
 chmod +x '$TARGET_HOME/start-vnc.sh'"
 
 as_user "cat > '$TARGET_HOME/stop-vnc.sh' <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-vncserver -kill :1 || true
+DISPLAY_NUM="\${VNC_DISPLAY:-:1}"
+vncserver -kill "\$DISPLAY_NUM" || true
 pkill -9 Xtightvnc tigervnc Xvnc 2>/dev/null || true
-echo \"VNC :1 stopped.\"
+echo "VNC \$DISPLAY_NUM stopped."
 EOF
 chmod +x '$TARGET_HOME/stop-vnc.sh'"
 
@@ -111,28 +118,35 @@ Subsystem sftp internal-sftp
 PidFile $TARGET_HOME/.ssh/sshd.pid
 EOF"
 
+# start/stop SSH helpers (hardened: PIDF always defined)
 as_user "cat > '$TARGET_HOME/start-ssh.sh' <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-CONF=\"$HOME/.ssh/sshd_config\"
-PIDF=\"$HOME/.ssh/sshd.pid\"
-[ -f \"$PIDF\" ] && [ -s \"$PIDF\" ] && kill \"\$(cat \"$PIDF\")\" 2>/dev/null || true
-/usr/sbin/sshd -f \"$CONF\" -D &
-echo \$! > \"$PIDF\"
-echo \"User-level sshd started on port 10022 (user: \$USER). Use: ssh \$USER@127.0.0.1 -p 10022\"
+CONF="\${CONF:-\$HOME/.ssh/sshd_config}"
+PIDF="\${PIDF:-\$HOME/.ssh/sshd.pid}"
+
+if [ -n "\${PIDF:-}" ] && [ -f "\$PIDF" ] && [ -s "\$PIDF" ]; then
+  kill "\$(cat "\$PIDF")" 2>/dev/null || true
+  rm -f "\$PIDF"
+fi
+
+/usr/sbin/sshd -f "\$CONF" -D &
+echo \$! > "\$PIDF"
+echo "User-level sshd started on port 10022 (user: \$USER). Use: ssh \$USER@127.0.0.1 -p 10022"
 EOF
 chmod +x '$TARGET_HOME/start-ssh.sh'"
 
 as_user "cat > '$TARGET_HOME/stop-ssh.sh' <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-PIDF=\"$HOME/.ssh/sshd.pid\"
-if [ -f \"$PIDF\" ] && [ -s \"$PIDF\" ]; then
-  kill \"\$(cat \"$PIDF\")\" 2>/dev/null || true
-  rm -f \"$PIDF\"
-  echo \"User-level sshd stopped.\"
+PIDF="\${PIDF:-\$HOME/.ssh/sshd.pid}"
+
+if [ -n "\${PIDF:-}" ] && [ -f "\$PIDF" ] && [ -s "\$PIDF" ]; then
+  kill "\$(cat "\$PIDF")" 2>/dev/null || true
+  rm -f "\$PIDF"
+  echo "User-level sshd stopped."
 else
-  echo \"No user-level sshd running.\"
+  echo "No user-level sshd running."
 fi
 EOF
 chmod +x '$TARGET_HOME/stop-ssh.sh'"
@@ -150,7 +164,7 @@ echo "User:        $TARGET_USER"
 echo "Home:        $TARGET_HOME"
 echo
 echo "Start desktop:  su - $TARGET_USER -c \"$TARGET_HOME/start-vnc.sh\"    (or run as the user)"
-echo "Then connect Run VNC to:  127.0.0.1:5901"
+echo "Then connect Run VNC to:  127.0.0.1:5901 (or the printed port)"
 echo "Stop desktop:   su - $TARGET_USER -c \"$TARGET_HOME/stop-vnc.sh\""
 echo
 echo "Optional SSH:   su - $TARGET_USER -c \"$TARGET_HOME/start-ssh.sh\""
